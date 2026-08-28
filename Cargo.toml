@@ -1,0 +1,13 @@
+[package]
+name = "diskhog"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Fast terminal disk usage analyzer for finding the largest files and directories"
+license = "MIT"
+repository = "https://github.com/BLCCoreStudio/DiskHog"
+readme = "README.md"
+keywords = ["disk-usage", "cli", "filesystem", "linux"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
