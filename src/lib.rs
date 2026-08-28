@@ -225,10 +225,8 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock should be after Unix epoch")
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!(
-                "diskhog-test-{}-{nonce}",
-                std::process::id()
-            ));
+            let path =
+                std::env::temp_dir().join(format!("diskhog-test-{}-{nonce}", std::process::id()));
             fs::create_dir_all(&path).expect("test directory should be created");
             Self(path)
         }
