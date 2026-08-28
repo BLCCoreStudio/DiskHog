@@ -1,10 +1,16 @@
 # DiskHog
 
+**Find the files and directories consuming the most disk space.**
+
 DiskHog is a small, read-only Rust CLI for finding the files and directories using the most disk space.
 
 It is Linux-first, dependency-free at runtime/build time beyond the Rust standard library, and designed to stay predictable: no deletion, no telemetry, no backend, and no symlink traversal.
 
-> **Status:** v0.1.0 is under development. No release has been published yet.
+## Status
+
+**DiskHog v0.1.0 is available as the first public release.**
+
+A prebuilt Linux x86_64 archive and SHA-256 checksum are available on the [GitHub Releases page](https://github.com/BLCCoreStudio/DiskHog/releases/tag/v0.1.0).
 
 ## Features
 
@@ -21,12 +27,29 @@ It is Linux-first, dependency-free at runtime/build time beyond the Rust standar
 
 On Unix systems DiskHog uses allocated filesystem blocks, which better reflects real disk consumption for sparse files. On non-Unix platforms it falls back to the file length reported by the standard library.
 
-## Build
+## Install on Linux x86_64
+
+Download these files from the [v0.1.0 release](https://github.com/BLCCoreStudio/DiskHog/releases/tag/v0.1.0):
+
+- `diskhog-v0.1.0-x86_64-unknown-linux-gnu.tar.gz`
+- `diskhog-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256`
+
+Verify and extract:
+
+```bash
+sha256sum -c diskhog-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf diskhog-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+./diskhog --version
+```
+
+You can optionally place `diskhog` somewhere on your `PATH`, such as `~/.local/bin`.
+
+## Build from source
 
 ```bash
 git clone https://github.com/BLCCoreStudio/DiskHog.git
 cd DiskHog
-cargo build --release
+cargo build --release --locked
 ```
 
 The binary will be at `target/release/diskhog` (`diskhog.exe` on Windows).
@@ -97,3 +120,5 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting guidance.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Built by **BLC Core Studio**.
