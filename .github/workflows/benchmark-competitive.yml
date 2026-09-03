@@ -50,9 +50,10 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/diskhog-fixture
           mkdir -p /tmp/diskhog-fixture
-          for d in $(seq -w 1 100); do
+          for d in $(seq -w 1 1000); do
             mkdir -p "/tmp/diskhog-fixture/dir_$d"
-            size=$((10#$d * 64))
+            size=4
+            if [[ "$d" == "1000" ]]; then size=128; fi
             for f in $(seq -w 1 8); do
               fallocate -l "${size}K" "/tmp/diskhog-fixture/dir_$d/file_$f.bin"
             done
@@ -62,10 +63,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./target/release/diskhog --dirs --depth 1 --limit 100 /tmp/diskhog-fixture > /tmp/diskhog.out
+          ./target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture > /tmp/diskhog.out
           /tmp/dua aggregate /tmp/diskhog-fixture/dir_* > /tmp/dua.out
-          grep -q 'dir_100' /tmp/diskhog.out
-          grep -q 'dir_100' /tmp/dua.out
+          grep -q 'dir_1000' /tmp/diskhog.out
+          grep -q 'dir_1000' /tmp/dua.out
 
       - name: Benchmark top-level directory aggregation
         shell: bash
@@ -73,22 +74,22 @@ jobs:
           set -euo pipefail
           mkdir -p benchmark-results
           {
-            echo "workload=recursive size of the same 100 top-level directories"
+            echo "workload=recursive size of the same 1000 top-level directories / 8000 files"
             echo "runner=ubuntu-24.04"
             echo "kernel=$(uname -srmo)"
             echo "cpu=$(lscpu | awk -F: '/Model name/{gsub(/^[ \t]+/,"",$2); print $2; exit}')"
-            echo "diskhog=$(./target/release/diskhog --version)"
+            echo "diskhog=0.1.0"
             echo "dua=$(/tmp/dua --version 2>&1 | head -n1)"
             echo "hyperfine=$(hyperfine --version | head -n1)"
           } > benchmark-results/environment.txt
 
-          hyperfine --warmup 3 --runs 15 \
+          hyperfine --warmup 5 --runs 25 \
             --export-json benchmark-results/directory-aggregation.json \
             --export-markdown benchmark-results/directory-aggregation.md \
-            --command-name 'DiskHog' './target/release/diskhog --dirs --depth 1 --limit 100 /tmp/diskhog-fixture >/dev/null' \
+            --command-name 'DiskHog' './target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture >/dev/null' \
             --command-name 'dua 2.44.0' '/tmp/dua aggregate /tmp/diskhog-fixture/dir_* >/dev/null'
 
-          /usr/bin/time -v ./target/release/diskhog --dirs --depth 1 --limit 100 /tmp/diskhog-fixture >/dev/null 2>benchmark-results/diskhog-time-v.txt
+          /usr/bin/time -v ./target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture >/dev/null 2>benchmark-results/diskhog-time-v.txt
           /usr/bin/time -v /tmp/dua aggregate /tmp/diskhog-fixture/dir_* >/dev/null 2>benchmark-results/dua-time-v.txt
           cat benchmark-results/directory-aggregation.md
 
