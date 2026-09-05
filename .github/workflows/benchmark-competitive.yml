@@ -1,0 +1,117 @@
+name: Competitive benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/benchmark-competitive.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disk-usage:
+    name: DiskHog vs dua
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install benchmark tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes hyperfine time curl
+
+      - name: Build DiskHog
+        run: cargo build --release --locked
+
+      - name: Install pinned dua v2.44.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://github.com/Byron/dua-cli/releases/download/v2.44.0/dua-v2.44.0-x86_64-unknown-linux-musl.tar.gz'
+          rm -rf /tmp/dua-extract
+          mkdir -p /tmp/dua-extract
+          curl -fL "$url" -o /tmp/dua.tar.gz
+          echo 'e2219f722f93fbe7069df282f2bf33e7a524292ef43ca5fe27b25cf3fe158a3d  /tmp/dua.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/dua.tar.gz -C /tmp/dua-extract
+          dua_bin="$(find /tmp/dua-extract -maxdepth 3 -type f -name dua -perm -u+x -print -quit)"
+          test -n "$dua_bin"
+          cp "$dua_bin" /tmp/dua
+          /tmp/dua --version
+
+      - name: Create deterministic directory fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/diskhog-fixture
+          mkdir -p /tmp/diskhog-fixture
+          for d in $(seq -w 1 1000); do
+            mkdir -p "/tmp/diskhog-fixture/dir_$d"
+            size=4
+            if [[ "$d" == "1000" ]]; then size=128; fi
+            for f in $(seq -w 1 8); do
+              fallocate -l "${size}K" "/tmp/diskhog-fixture/dir_$d/file_$f.bin"
+            done
+          done
+
+      - name: Verify equivalent task
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture > /tmp/diskhog.out
+          /tmp/dua aggregate /tmp/diskhog-fixture/dir_* > /tmp/dua.out
+          grep -q 'dir_1000' /tmp/diskhog.out
+          grep -q 'dir_1000' /tmp/dua.out
+
+      - name: Benchmark top-level directory aggregation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-results
+          {
+            echo "workload=recursive size of the same 1000 top-level directories / 8000 files"
+            echo "runner=ubuntu-24.04"
+            echo "kernel=$(uname -srmo)"
+            echo "cpu=$(lscpu | awk -F: '/Model name/{gsub(/^[ \t]+/,"",$2); print $2; exit}')"
+            echo "diskhog=0.1.0"
+            echo "dua=$(/tmp/dua --version 2>&1 | head -n1)"
+            echo "hyperfine=$(hyperfine --version | head -n1)"
+          } > benchmark-results/environment.txt
+
+          hyperfine --warmup 5 --runs 25 \
+            --export-json benchmark-results/directory-aggregation.json \
+            --export-markdown benchmark-results/directory-aggregation.md \
+            --command-name 'DiskHog' './target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture >/dev/null' \
+            --command-name 'dua 2.44.0' '/tmp/dua aggregate /tmp/diskhog-fixture/dir_* >/dev/null'
+
+          /usr/bin/time -v ./target/release/diskhog --dirs --depth 1 --limit 1000 /tmp/diskhog-fixture >/dev/null 2>benchmark-results/diskhog-time-v.txt
+          /usr/bin/time -v /tmp/dua aggregate /tmp/diskhog-fixture/dir_* >/dev/null 2>benchmark-results/dua-time-v.txt
+          cat benchmark-results/directory-aggregation.md
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [[ -f benchmark-results/environment.txt ]]; then
+            echo '## Environment' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat benchmark-results/environment.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f benchmark-results/directory-aggregation.md ]]; then
+            echo '## Recursive directory-size aggregation' >> "$GITHUB_STEP_SUMMARY"
+            cat benchmark-results/directory-aggregation.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload raw evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: diskhog-competitive-benchmark-${{ github.sha }}
+          path: benchmark-results/
+          if-no-files-found: error
+          retention-days: 90
